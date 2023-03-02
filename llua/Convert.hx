@@ -11,6 +11,7 @@ class Convert {
 	/**
 	 * To Lua
 	 */
+	public static var enableUnsupportedTraces = false;
 	public static function toLua(l:State, val:Any):Bool {
 
 		switch (Type.typeof(val)) {
@@ -20,16 +21,21 @@ class Convert {
 				Lua.pushboolean(l, val);
 			case Type.ValueType.TInt:
 				Lua.pushinteger(l, cast(val, Int));
+			// case Type.ValueType.TFunction: 
+			// 	Lua.pushcfunction(l, val);
 			case Type.ValueType.TFloat:
 				Lua.pushnumber(l, val);
 			case Type.ValueType.TClass(String):
 				Lua.pushstring(l, cast(val, String));
 			case Type.ValueType.TClass(Array):
 				arrayToLua(l, val);
+			case Type.ValueType.TClass(haxe.ds.StringMap) | Type.ValueType.TClass(haxe.ds.ObjectMap):
+				mapToLua(l, val);
 			case Type.ValueType.TObject:
 				objectToLua(l, val); // {}
 			default:
-				trace("haxe value not supported\n"+val+" - "+Type.typeof(val) );
+				if(enableUnsupportedTraces)
+					trace("haxe value not supported\n"+val+" - "+Type.typeof(val) );
 				return false;
 		}
 
@@ -45,6 +51,24 @@ class Convert {
 		for (i in 0...size) {
 			Lua.pushnumber(l, i + 1);
 			toLua(l, arr[i]);
+			Lua.settable(l, -3);
+		}
+
+	}
+
+	static inline function mapToLua(l:State, res:Map<String,Dynamic>) {
+
+		var tLen = 0;
+
+		for(n in res){
+			tLen++;
+		}
+
+		Lua.createtable(l, tLen, 0);
+		for (index => val in res){
+			Lua.pushstring(l, Std.string(index));
+			
+			toLua(l, val);
 			Lua.settable(l, -3);
 		}
 
@@ -100,7 +124,7 @@ class Convert {
 			// 	trace("thread\n");
 			default:
 				ret = null;
-				trace("return value not supported\n"+v);
+				if(enableUnsupportedTraces) trace("return value not supported\n"+v);
 		}
 
 		return ret;
