@@ -562,31 +562,38 @@ class Lua_helper {
 
 	}
 
+	public static var sendErrorsToLua:Bool = true;
 	public static inline function callback_handler(l:State, fname:String):Int {
+		try{
 
-		var cbf = callbacks.get(fname);
+			var cbf = callbacks.get(fname);
 
-		if(cbf == null) return 0;
+			if(cbf == null) return 0;
 
-		var nparams:Int = Lua.gettop(l);
-		var args:Array<Dynamic> = [];
+			var nparams:Int = Lua.gettop(l);
+			var args:Array<Dynamic> = [];
 
-		for (i in 0...nparams) {
-			args[i] = Convert.fromLua(l, i + 1);
-		}
+			for (i in 0...nparams) {
+				args[i] = Convert.fromLua(l, i + 1);
+			}
 
-		var ret:Dynamic = null;
-		/* return the number of results */
+			var ret:Dynamic = null;
+			/* return the number of results */
 
-		ret = Reflect.callMethod(null,cbf,args);
+			ret = Reflect.callMethod(null,cbf,args);
 
-		if(ret != null){
-			Convert.toLua(l, ret);
-			return 1;
+			if(ret != null){
+				Convert.toLua(l, ret);
+				return 1;
+			}
+		}catch(e:Dynamic){
+			if(sendErrorsToLua) return LuaL.error(l, 'CALLBACK ERROR! ${if(e.message != null) e.message else e}');
+			trace(e);
+			throw(e);
 		}
 		return 0;
 
-	} //callback_handler
+	} 
 
 }
 
