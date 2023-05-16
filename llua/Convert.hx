@@ -111,17 +111,11 @@ class Convert {
 	}
 
 	static inline function mapToLua(l:State, res:Map<String,Dynamic>) {
-
 		var tLen = 0;
-
-		for(n in res){
-			tLen++;
-		}
-
+		for(n in res) tLen++;
 		Lua.createtable(l, tLen, 0);
 		for (index => val in res){
 			Lua.pushstring(l, Std.string(index));
-			
 			toLua(l, val);
 			Lua.settable(l, -3);
 		}
@@ -129,15 +123,7 @@ class Convert {
 	}
 
 	static inline function objectToLua(l:State, res:Any) {
-
-		var tLen = 0;
-
-		for(n in Reflect.fields(res))
-		{
-			tLen++;
-		}
-
-		Lua.createtable(l, tLen, 0);
+		Lua.createtable(l, Reflect.fields(res).length, 0);
 		for (n in Reflect.fields(res)){
 			Lua.pushstring(l, n);
 			toLua(l, Reflect.field(res, n));
