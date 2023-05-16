@@ -12,6 +12,12 @@ class Convert {
 	 * To Lua
 	 */
 	public static var enableUnsupportedTraces = false;
+	public static var allowFunctions = true;
+	public static var functionReferences:Map<Dynamic,Array<Dynamic>> = new Map<Dynamic,Array<Dynamic>>();
+	// It's recommended to purge this every now and then. Note that this'll effect *every* lua state
+	@:keep inline public static function cleanFunctionRefs(){
+		functionReferences = new Map<Dynamic,Array<Dynamic>>();
+	}
 	public static function toLua(l:State, val:Any):Bool {
 
 		switch (Type.typeof(val)) {
@@ -22,7 +28,26 @@ class Convert {
 			case Type.ValueType.TInt:
 				Lua.pushinteger(l, cast(val, Int));
 			// case Type.ValueType.TFunction: 
-			// 	Lua.pushcfunction(l, val);
+			// 	if(!allowFunctions) return false;
+			// 	return false;
+				// var funcIndex = -1;
+				// if(functionReferences[l] == null){
+				// 	functionReferences[l] = [val];
+				// 	funcIndex = 0;
+				// }else{
+				// 	for(i => v in functionReferences[l]){
+				// 		if(v == val){
+				// 			funcIndex = i;
+				// 			break;
+				// 		}
+				// 	}
+				// 	if(funcIndex == -1){
+				// 		funcIndex = functionReferences[l].length;
+				// 		functionReferences[l].push(val);
+				// 	}
+				// }
+				// Lua.pushnumber(l, funcIndex);
+				// Lua.pushcclosure(l, cpp.Callable.fromFunction(new cpp.Function(function(e:StatePointer):Int{return callback_handler(val,l);})),1);
 			case Type.ValueType.TFloat:
 				Lua.pushnumber(l, val);
 			case Type.ValueType.TClass(String):
@@ -34,12 +59,41 @@ class Convert {
 			case Type.ValueType.TObject:
 				objectToLua(l, val); // {}
 			default:
-				if(enableUnsupportedTraces)
-					trace("haxe value not supported\n"+val+" - "+Type.typeof(val) );
+				if(enableUnsupportedTraces) trace('Haxe value of $val of type ${Type.typeof(val)} not supported!' );
 				return false;
 		}
-
 		return true;
+	}
+
+	public static function callback_handler(cbf:Dynamic,l:State/*,cbf:Dynamic,lsp:Dynamic*/):Int {
+		try{
+			var l:State = cast l;
+			// var cbf = null;
+			var nparams:Int = Lua.gettop(l);
+			var args:Array<Dynamic> = [];
+			// if(functionReferences[l] == null) return 0;
+
+			for (i in 0...nparams) args[i] = fromLua(l, i + 1);
+			// var funcID:Int = args.shift();
+			// var cbf = functionReferences[l][funcID];
+			// trace(l,nparams,args,funcID,cbf);
+			if(cbf == null) return 0;
+
+
+			var ret:Dynamic = null;
+			/* return the number of results */
+
+			ret = Reflect.callMethod(null,cbf,args);
+			trace(ret);
+			if(ret != null){
+				toLua(l, ret);
+				return 1;
+			}
+		}catch(e){
+			trace('${e}');
+			throw(e);
+		}
+		return 0;
 
 	}
 
@@ -95,11 +149,11 @@ class Convert {
 	/**
 	 * From Lua
 	 */
-	public static inline function fromLua(l:State, v:Int):Any {
+	public static function fromLua(l:State, v:Int):Any {
 
 		var ret:Any = null;
-
-		switch(Lua.type(l, v)) {
+		var luaType = Lua.type(l, v);
+		switch(luaType) {
 			case Lua.LUA_TNIL:
 				ret = null;
 			case Lua.LUA_TBOOLEAN:
@@ -110,8 +164,8 @@ class Convert {
 				ret = Lua.tostring(l, v);
 			case Lua.LUA_TTABLE:
 				ret = toHaxeObj(l, v);
-			// case Lua.LUA_TFUNCTION:
-			// 	ret = LuaL.ref(l, Lua.LUA_REGISTRYINDEX);
+			case Lua.LUA_TFUNCTION: // From https://github.com/DragShot/linc_luajit/
+				ret = new LuaCallback(l, LuaL.ref(l, Lua.LUA_REGISTRYINDEX));
 			// 	trace("function\n");
 			// case Lua.LUA_TUSERDATA:
 			// 	ret = LuaL.ref(l, Lua.LUA_REGISTRYINDEX);
@@ -124,7 +178,7 @@ class Convert {
 			// 	trace("thread\n");
 			default:
 				ret = null;
-				if(enableUnsupportedTraces) trace("return value not supported\n"+v);
+				if(enableUnsupportedTraces) trace('Return value $v of type $luaType not supported');
 		}
 
 		return ret;
