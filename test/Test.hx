@@ -3,6 +3,13 @@ import llua.LuaL;
 import llua.State;
 import llua.Convert;
 
+class Testing {
+	var x = 1;
+	function die(){
+		trace('no way i died');
+	}
+}
+
 
 class Test {
 		
@@ -34,6 +41,10 @@ class Test {
 		trace(Convert.callLuaFunction(vm,'fromHaxe',[testValues]));
 		trace("to haxe:");
 		trace(Convert.callLuaFunction(vm,'toHaxe',null,true));
+
+
+		Convert.setGlobal(vm,"haxeValue",Testing);
+		Convert.callLuaFuncNoReturns(vm,'test');
 		// Convert.toLua(vm,testValues);
 
 		// Lua.pcall(vm,Lua.gettop(vm)-1, 0, 1);

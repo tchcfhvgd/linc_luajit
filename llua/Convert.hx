@@ -28,8 +28,8 @@ class Convert {
 			case Type.ValueType.TInt:
 				Lua.pushinteger(l, cast(val, Int));
 			// case Type.ValueType.TFunction: 
-			// 	if(!allowFunctions) return false;
-			// 	return false;
+				// if(!allowFunctions) return false;
+				// return false;
 				// var funcIndex = -1;
 				// if(functionReferences[l] == null){
 				// 	functionReferences[l] = [val];
@@ -46,8 +46,12 @@ class Convert {
 				// 		functionReferences[l].push(val);
 				// 	}
 				// }
-				// Lua.pushnumber(l, funcIndex);
-				// Lua.pushcclosure(l, cpp.Callable.fromFunction(new cpp.Function(function(e:StatePointer):Int{return callback_handler(val,l);})),1);
+				
+				// Lua.pushcfunction(l,
+				
+				// {
+				// 	return callback_handler(val,l);
+				// }),1);
 			case Type.ValueType.TFloat:
 				Lua.pushnumber(l, val);
 			case Type.ValueType.TClass(String):
@@ -57,7 +61,7 @@ class Convert {
 			case Type.ValueType.TClass(haxe.ds.StringMap) | Type.ValueType.TClass(haxe.ds.ObjectMap):
 				mapToLua(l, val);
 			case Type.ValueType.TObject:
-				objectToLua(l, val); // {}
+				anonToLua(l, val); // {}
 			default:
 				if(enableUnsupportedTraces) trace('Haxe value of $val of type ${Type.typeof(val)} not supported!' );
 				return false;
@@ -65,21 +69,15 @@ class Convert {
 		return true;
 	}
 
-	public static function callback_handler(cbf:Dynamic,l:State/*,cbf:Dynamic,lsp:Dynamic*/):Int {
+	public static function callback_handler(cbf:Dynamic,l:State,?object:Dynamic/*,cbf:Dynamic,lsp:Dynamic*/):Int {
 		try{
-			final l:State = cast l;
-			// var cbf = null;
+			final l:State = l;
 			final nparams:Int = Lua.gettop(l);
-			// if(functionReferences[l] == null) return 0;
 
-			final args:Array<Dynamic> = [for (i in 0...nparams) fromLua(l, i + 1)];
-			// var funcID:Int = args.shift();
-			// var cbf = functionReferences[l][funcID];
-			// trace(l,nparams,args,funcID,cbf);
 			if(cbf == null) return 0;
 
 			/* return the number of results */
-			final ret:Dynamic = Reflect.callMethod(null,cbf,args);
+			final ret:Dynamic = Reflect.callMethod(object,cbf,[for (i in 0...nparams) fromLua(l, i + 1)]);
 			if(ret != null){
 				toLua(l, ret);
 				return 1;
@@ -93,8 +91,7 @@ class Convert {
 	}
 
 	@:keep public static inline function arrayToLua(l:State, arr:Array<Any>) {
-		final size:Int = arr.length;
-		Lua.createtable(l, size, 0);
+		Lua.createtable(l, arr.length, 0);
 		for (i => v in arr) {
 			Lua.pushnumber(l, i + 1);
 			toLua(l, v);
@@ -113,7 +110,7 @@ class Convert {
 
 	}
 
-	@:keep static inline function objectToLua(l:State, res:Any) {
+	@:keep static inline function anonToLua(l:State, res:Any) {
 		Lua.createtable(l, 0, 0);
 		for (n in Reflect.fields(res)){
 			Lua.pushstring(l, n);
@@ -121,7 +118,26 @@ class Convert {
 			Lua.settable(l, -3);
 		}
 	}
+	// @:keep static inline function instanceToLua(l:State, res:Any) {
+	// 	Lua.createtable(l, 0, 0);
+	// 	Lua.pushstring(l, "__index");
 
+	// 	// for (n in Reflect.fields(res)){
+	// 	// 	Lua.pushstring(l, n);
+	// 	// 	toLua(l, Reflect.field(res, n));
+	// 	// 	Lua.settable(l, -3);
+	// 	// }
+	// }
+
+	@:keep public static inline function setGlobal(l:State, index:String, value:Dynamic) {
+		// Lua.getglobal(l, Lua.LUA_GLOBALSINDEX);
+		// toLua(l, index);
+
+		toLua(l, value);
+		Lua.setfield(l, Lua.LUA_GLOBALSINDEX, index);
+		// Lua.settable(l, -3);
+		// Lua.pop(l,0);
+	}
 	/**
 	 * From Lua
 	 */
@@ -212,14 +228,6 @@ class Convert {
 	}
 
 }*/
-	public static function loopTableCallback(l, v:Int, c:()->Bool) {
-		// Lua.pushnil(l);
-		while(Lua.next(l, v < 0 ? v - 1 : v) != 0) {
-			var e = c();
-			Lua.pop(l, 1);
-			if(e == true) return;
-		}
-	}
 	public static function toHaxeObj(l, i:Int):Any {
 		var hasItems = false;
 		var array = true;
@@ -279,6 +287,8 @@ class Convert {
 
 		If func is nil, the function at the top of the stack will be run
 		If the lua function errors, a llua.LuaException will be thrown
+
+		This is SLIGHTLY faster than callLuaFunction since it doesn't do any handling of returns. Useful for things like calling an event that doesn't return anything
 	**/
 	public static function callLuaFuncNoReturns(l, func:String,?args:Array<Dynamic> = null):Void {
 		Lua.getglobal(l, func);
